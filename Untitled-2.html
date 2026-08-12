@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📦 Sistema de Paquetería con GPS</title>
+    <!-- 🗺️ MAPA GRATIS: OpenStreetMap + Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 12px 25px;
+            background: rgba(255,255,255,0.3);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        .tab.active {
+            background: white;
+            color: #1a73e8;
+        }
+        .tab-eliminados {
+            background: rgba(220, 53, 69, 0.6);
+        }
+        .tab-eliminados.active {
+            background: #dc3545;
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        button {
+            padding: 12px 18px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+            color: white;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+            margin-right: 8px;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+            margin-right: 8px;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-restore {
+            background: #28a745;
+            color: white;
+            margin-right: 8px;
+        }
+        .btn-gps {
+            background: linear-gradient(135deg, #34a853 0%, #0f9d58 100%);
+            color: white;
+            margin-top: 10px;
+            width: 100%;
+            font-size: 15px;
+        }
+        .guia-generada {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .numero-guia {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #2e7d32;
+            letter-spacing: 3px;
+            margin: 10px 0;
+        }
+        .envio-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+        .envio-item:hover {
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        .envio-item.eliminado {
+            background: #fff5f5;
+            border: 1px solid #ffcccc;
+            opacity: 0.9;
+        }
+        .estado {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .estado-pendiente { background: #fff3cd; color: #856404; }
+        .estado-transito { background: #cce5ff; color: #004085; }
+        .estado-entregado { background: #d4edda; color: #155724; }
+        .etiqueta {
+            border: 2px dashed #333;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+            background: white;
+        }
+        .etiqueta h3 {
+            text-align: center;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+        .etiqueta .codigo-barras {
+            font-family: monospace;
+            font-size: 24px;
+            text-align: center;
+            margin: 15px 0;
+        }
+        .fila {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .col {
+            flex: 1;
+            min-width: 200px;
+        }
+        hr {
+            margin: 20px 0;
+            border: 1px solid #eee;
+        }
+        /* 🗺️ ESTILOS DEL MAPA */
+        #mapa {
+            height: 400px;
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 20px;
+            border: 3px solid #e0e0e0;
+            z-index: 1;
+        }
+        .ubicacion-actual {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border-left: 4px solid #1a73e8;
+        }
+        .historial-ubicaciones {
+            margin-top: 20px;
+        }
+        .ubicacion-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+        .ubicacion-item:hover {
+            background: #f9f9f9;
+        }
+        .punto-gps {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #1a73e8;
+            box-shadow: 0 0 12px rgba(26, 115, 232, 0.6);
+            flex-shrink: 0;
+        }
+        .sin-ubicacion {
+            color: #666;
+            font-style: italic;
+            padding: 25px;
+            text-align: center;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .titulo-seccion {
+            margin-top: 25px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+            color: #333;
+            font-size: 18px;
+        }
+        .acciones-envio {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed #eee;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .aviso-eliminados {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 Sistema de Paquetería con GPS 🗺️</h1>
+
+        <!-- Pestañas -->
+        <div class="tabs">
+            <button class="tab active" onclick="mostrarSeccion('registrar')">📝 Registrar Envío</button>
+            <button class="tab" onclick="mostrarSeccion('rastrear')">📍 Rastrear con GPS</button>
+            <button class="tab" onclick="mostrarSeccion('historial')">📋 Historial Activo</button>
+            <button class="tab tab-eliminados" onclick="mostrarSeccion('eliminados')">🗑️ Eliminados</button>
+        </div>
+
+        <!-- SECCIÓN 1: Registrar Envío -->
+        <div id="seccion-registrar" class="card">
+            <h2>📝 Registrar Nuevo Envío</h2>
+            <form id="form-envio">
+                <div class="fila">
+                    <div class="col form-group">
+                        <label>👤 Nombre del Remitente</label>
+                        <input type="text" id="remitente-nombre" required>
+                    </div>
+                    <div class="col form-group">
+                        <label>📞 Teléfono del Remitente</label>
+                        <input type="tel" id="remitente-telefono" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>📍 Dirección del Remitente</label>
+                    <textarea id="remitente-direccion" rows="2" required></textarea>
+                </div>
+
+                <hr>
+
+                <div class="fila">
+                    <div class="col form-group">
+                        <label>🎯 Nombre del Destinatario</label>
+                        <input type="text" id="destinatario-nombre" required>
+                    </div>
+                    <div class="col form-group">
+                        <label>📞 Teléfono del Destinatario</label>
+                        <input type="tel" id="destinatario-telefono" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>📍 Dirección del Destinatario</label>
+                    <textarea id="destinatario-direccion" rows="2" required></textarea>
+                </div>
+
+                <div class="fila">
+                    <div class="col form-group">
+                        <label>📦 Peso (kg)</label>
+                        <input type="number" step="0.1" id="paquete-peso" required>
+                    </div>
+                    <div class="col form-group">
+                        <label>📏 Dimensiones (cm)</label>
+                        <input type="text" id="paquete-medidas" placeholder="L x An x Al" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>🚚 Tipo de Servicio</label>
+                    <select id="servicio-tipo" onchange="calcularPrecio()">
+                        <option value="estandar">Estándar (3-5 días) - $80</option>
+                        <option value="express">Express (1-2 días) - $150</option>
+                        <option value="nocturno">Entrega al día siguiente - $220</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>💰 Costo del Envío</label>
+                    <input type="text" id="costo-total" value="$80.00" readonly style="background: #f5f5f5; font-weight: bold; font-size: 18px; color: #2e7d32;">
+                </div>
+
+                <button type="submit" class="btn-primary">✅ GENERAR NÚMERO DE GUÍA</button>
+            </form>
+
+            <div class="guia-generada" id="guia-generada">
+                <h3>✅ ¡Envío Registrado con Éxito!</h3>
+                <p>Número de Guía:</p>
+                <div class="numero-guia" id="mostrar-guia"></div>
+                <button class="btn-success" onclick="imprimirEtiqueta()">🖨️ Imprimir Etiqueta</button>
+                <button class="btn-warning" onclick="nuevoEnvio()">➕ Nuevo Envío</button>
+            </div>
+
+            <div class="etiqueta" id="etiqueta-impresion">
+                <h3>📦 ETIQUETA DE ENVÍO</h3>
+                <p><strong>Número de Guía:</strong> <span id="et-guia"></span></p>
+                <p><strong>Fecha:</strong> <span id="et-fecha"></span></p>
+                <hr>
+                <p><strong>DE:</strong></p>
+                <p id="et-remitente"></p>
+                <hr>
+                <p><strong>PARA:</strong></p>
+                <p id="et-destinatario"></p>
+                <hr>
+                <p><strong>Servicio:</strong> <span id="et-servicio"></span></p>
+                <p><strong>Peso:</strong> <span id="et-peso"></span> kg</p>
+                <div class="codigo-barras">||||||||||||||||||||||</div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 2: Rastrear con GPS 🗺️📍 -->
+        <div id="seccion-rastrear" class="card hidden">
+            <h2>📍 Rastrear Paquete con GPS 🗺️</h2>
+            
+            <div class="form-group">
+                <label>🔢 Escribe tu Número de Guía</label>
+                <input type="text" id="buscar-guia" placeholder="Ej: MEX-12345678">
+            </div>
+            <button class="btn-primary" onclick="rastrearPaquete()">🔍 BUSCAR PAQUETE</button>
+
+            <div id="resultado-rastreo" style="margin-top: 30px; display: none;">
+                <h3>📦 Información del Envío</h3>
+                <p><strong>Número de Guía:</strong> <span id="rastreo-guia"></span></p>
+                <p><strong>Destinatario:</strong> <span id="rastreo-destinatario"></span></p>
+                <p><strong>Dirección de Entrega:</strong> <span id="rastreo-direccion"></span></p>
+                <p><strong>Estado:</strong> <span id="rastreo-estado" class="estado estado-pendiente"></span></p>
+                <p><strong>Fecha de Registro:</strong> <span id="rastreo-fecha"></span></p>
+                
+                <!-- 📍 UBICACIÓN GPS ACTUAL -->
+                <div class="ubicacion-actual">
+                    <h4>📍 Ubicación Actual (GPS):</h4>
+                    <p id="ubicacion-texto" class="sin-ubicacion">📍 Sin ubicación registrada aún — presiona el botón de abajo</p>
+                    <button class="btn-gps" onclick="actualizarUbicacionGPS()">📡 ACTUALIZAR MI UBICACIÓN GPS</button>
+                </div>
+
+                <!-- 🗺️ MAPA INTERACTIVO GRATIS -->
+                <h4 class="titulo-seccion">🗺️ Mapa de Ubicación</h4>
+                <div id="mapa"></div>
+
+                <!-- 📍 HISTORIAL DE UBICACIONES -->
+                <div class="historial-ubicaciones">
+                    <h4 class="titulo-seccion">📍 Historial de Ubicaciones</h4>
+                    <div id="lista-ubicaciones">
+                        <p class="sin-ubicacion">📍 No hay ubicaciones registradas aún</p>
+                    </div>
+                </div>
+
+                <!-- 🔄 CAMBIAR ESTADO -->
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <h4>🔄 Actualizar Estado del Paquete:</h4>
+                    <select id="nuevo-estado" onchange="actualizarEstado()">
+                        <option value="pendiente">⏳ Pendiente de Recolección</option>
+                        <option value="transito">🚚 En Tránsito</option>
+                        <option value="entregado">✅ Entregado</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 3: Historial Activo 📋 -->
+        <div id="seccion-historial" class="card hidden">
+            <h2>📋 Historial de Envíos Activos</h2>
+            <p style="margin-bottom: 15px; color: #666;">💡 Cada pedido tiene un botón <strong>🗑️ Eliminar</strong> para moverlo a la pestaña de Eliminados</p>
+            <div id="lista-envios"></div>
+            <p id="sin-envios" style="text-align: center; color: #666; padding: 30px;">
+                📭 No hay envíos registrados aún. ¡Registra tu primer envío arriba!
+            </p>
+        </div>
+
+        <!-- SECCIÓN 4: Eliminados 🗑️ -->
+        <div id="seccion-eliminados" class="card hidden">
+            <h2>🗑️ Pedidos Eliminados</h2>
+            <div class="aviso-eliminados">
+                ⚠️ <strong>Aquí están los pedidos que moviste a la papelera.</strong><br>
+                ♻️ Presiona <strong>Restaurar</strong> para devolverlo al historial activo.<br>
+                💀 Presiona <strong>Borrar Definitivamente</strong> solo si estás SEGURO — no se puede recuperar.
+            </div>
+            <div id="lista-eliminados"></div>
+            <p id="sin-eliminados" style="text-align: center; color: #666; padding: 30px;">
+                🗑️ No hay pedidos eliminados aún. Los que elimines aparecerán aquí.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 📦 Base de datos
+        let envios = JSON.parse(localStorage.getItem('envios') || '[]');
+        let eliminados = JSON.parse(localStorage.getItem('eliminados') || '[]');
+        const costoServicios = { estandar: 80, express: 150, nocturno: 220 };
+        const nombresServicios = { estandar: 'Estándar', express: 'Express', nocturno: 'Entrega al día siguiente' };
+        
+        // 🗺️ Variables del MAPA GRATIS
+        let mapa = null;
+        let marcador = null;
+        let rutaLinea = null;
+        let envioActual = null;
+
+        // ✅ Inicializar MAPA GRATIS
+        function inicializarMapa() {
+            if (mapa !== null) return;
+            
+            mapa = L.map('mapa').setView([19.4326, -99.1332], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapa);
+
+            marcador = L.marker([19.4326, -99.1332], { draggable: false });
+        }
+
+        // ✅ Cambiar pestañas
+        function mostrarSeccion(nombre) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.card').forEach(card => card.classList.add('hidden'));
+            document.getElementById(`seccion-${nombre}`).classList.remove('hidden');
+            
+            if (nombre === 'rastrear') {
+                setTimeout(() => {
+                    inicializarMapa();
+                    mapa.invalidateSize();
+                }, 100);
+            }
+            
+            if (nombre === 'historial') mostrarHistorial();
+            if (nombre === 'eliminados') mostrarEliminados();
+        }
+
+        function calcularPrecio() {
+            const servicio = document.getElementById('servicio-tipo').value;
+            document.getElementById('costo-total').value = `$${costoServicios[servicio]}.00`;
+        }
+
+        function generarGuia() {
+            const prefijos = ['MEX', 'GDL', 'MTY', 'PUE', 'CUN', 'TIJ', 'MID', 'CJS'];
+            const prefijo = prefijos[Math.floor(Math.random() * prefijos.length)];
+            const numero = Math.floor(Math.random() * 90000000) + 10000000;
+            return `${prefijo}-${numero}`;
+        }
+
+        // 📝 Registrar envío
+        document.getElementById('form-envio').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const guia = generarGuia();
+            const servicio = document.getElementById('servicio-tipo').value;
+            
+            const envio = {
+                guia: guia,
+                fecha: new Date().toLocaleDateString('es-MX'),
+                remitente: {
+                    nombre: document.getElementById('remitente-nombre').value,
+                    telefono: document.getElementById('remitente-telefono').value,
+                    direccion: document.getElementById('remitente-direccion').value
+                },
+                destinatario: {
+                    nombre: document.getElementById('destinatario-nombre').value,
+                    telefono: document.getElementById('destinatario-telefono').value,
+                    direccion: document.getElementById('destinatario-direccion').value
+                },
+                paquete: {
+                    peso: document.getElementById('paquete-peso').value,
+                    medidas: document.getElementById('paquete-medidas').value
+                },
+                servicio: servicio,
+                costo: costoServicios[servicio],
+                estado: 'pendiente',
+                ubicaciones: []
+            };
+
+            envios.unshift(envio);
+            guardarDatos();
+
+            document.getElementById('mostrar-guia').textContent = guia;
+            document.getElementById('guia-generada').style.display = 'block';
+            
+            document.getElementById('et-guia').textContent = guia;
+            document.getElementById('et-fecha').textContent = envio.fecha;
+            document.getElementById('et-remitente').innerHTML = 
+                `${envio.remitente.nombre}<br>${envio.remitente.telefono}<br>${envio.remitente.direccion}`;
+            document.getElementById('et-destinatario').innerHTML = 
+                `${envio.destinatario.nombre}<br>${envio.destinatario.telefono}<br>${envio.destinatario.direccion}`;
+            document.getElementById('et-servicio').textContent = nombresServicios[servicio];
+            document.getElementById('et-peso').textContent = envio.paquete.peso;
+        });
+
+        function imprimirEtiqueta() {
+            document.getElementById('etiqueta-impresion').style.display = 'block';
+            window.print();
+        }
+
+        function nuevoEnvio() {
+            document.getElementById('form-envio').reset();
+            document.getElementById('guia-generada').style.display = 'none';
+            document.getElementById('etiqueta-impresion').style.display = 'none';
+            calcularPrecio();
+        }
+
+        // 🔍 Rastrear paquete
+        function rastrearPaquete() {
+            const guia = document.getElementById('buscar-guia').value.trim().toUpperCase();
+            const envio = envios.find(e => e.guia === guia);
+            
+            if (!envio) {
+                alert('❌ No se encontró ningún paquete con ese número de guía');
+                return;
+            }
+
+            envioActual = envio;
+            inicializarMapa();
+
+            document.getElementById('resultado-rastreo').style.display = 'block';
+            document.getElementById('rastreo-guia').textContent = envio.guia;
+            document.getElementById('rastreo-destinatario').textContent = envio.destinatario.nombre;
+            document.getElementById('rastreo-direccion').textContent = envio.destinatario.direccion;
+            document.getElementById('rastreo-fecha').textContent = envio.fecha;
+            
+            const estadoEl = document.getElementById('rastreo-estado');
+            estadoEl.textContent = envio.estado === 'pendiente' ? '⏳ Pendiente' : 
+                                   envio.estado === 'transito' ? '🚚 En Tránsito' : '✅ Entregado';
+            estadoEl.className = `estado estado-${envio.estado}`;
+
+            actualizarVistaUbicaciones(envio);
+        }
+
+        // 📡 Actualizar ubicación GPS
+        function actualizarUbicacionGPS() {
+            if (!envioActual) {
+                alert('⚠️ Primero busca un paquete escribiendo su número de guía');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert('❌ Tu dispositivo no tiene GPS o no lo soporta');
+                return;
+            }
+
+            const boton = event.target;
+            boton.innerHTML = '⏳ OBTENIENDO UBICACIÓN...';
+            boton.disabled = true;
+            boton.style.opacity = '0.7';
+
+            navigator.geolocation.getCurrentPosition(
+                function(posicion) {
+                    const lat = posicion.coords.latitude;
+                    const lng = posicion.coords.longitude;
+                    const precision = posicion.coords.accuracy;
+                    const fechaHora = new Date().toLocaleString('es-MX');
+
+                    const ubicacion = { lat, lng, precision, fecha: fechaHora };
+                    envioActual.ubicaciones.push(ubicacion);
+                    
+                    const indice = envios.findIndex(e => e.guia === envioActual.guia);
+                    if (indice !== -1) {
+                        envios[indice] = envioActual;
+                        guardarDatos();
+                    }
+
+                    mostrarUbicacionEnMapa(lat, lng);
+                    actualizarVistaUbicaciones(envioActual);
+
+                    alert(`✅ 📍 Ubicación guardada!\nLat: ${lat.toFixed(6)}\nLng: ${lng.toFixed(6)}\n🎯 Precisión: ±${Math.round(precision)} m`);
+                    
+                    boton.innerHTML = '📡 ACTUALIZAR MI UBICACIÓN GPS';
+                    boton.disabled = false;
+                    boton.style.opacity = '1';
+                },
+                function(error) {
+                    let mensaje = '❌ No se pudo obtener la ubicación:\n';
+                    switch(error.code) {
+                        case 1: mensaje += '→ Permiso denegado. Da clic en el candado 🔒 de la barra de direcciones → Ubicación → Permitir'; break;
+                        case 2: mensaje += '→ Ubicación no disponible. Intenta afuera o con mejor señal.'; break;
+                        case 3: mensaje += '→ Tiempo agotado. Intenta de nuevo.'; break;
+                    }
+                    alert(mensaje);
+                    boton.innerHTML = '📡 ACTUALIZAR MI UBICACIÓN GPS';
+                    boton.disabled = false;
+                    boton.style.opacity = '1';
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        }
+
+        // 🗺️ Mostrar ubicación en el mapa
+        function mostrarUbicacionEnMapa(lat, lng) {
+            inicializarMapa();
+            const ubicacion = [lat, lng];
+            mapa.setView(ubicacion, 15);
+            
+            if (marcador) marcador.remove();
+            marcador = L.marker(ubicacion).addTo(mapa)
+                .bindPopup(`<b>📍 Ubicación del Paquete</b><br>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}`)
+                .openPopup();
+
+            if (envioActual && envioActual.ubicaciones.length > 1) {
+                const puntosRuta = envioActual.ubicaciones.map(u => [u.lat, u.lng]);
+                if (rutaLinea) mapa.removeLayer(rutaLinea);
+                rutaLinea = L.polyline(puntosRuta, {
+                    color: '#1a73e8', weight: 4, opacity: 0.7, dashArray: '10, 10'
+                }).addTo(mapa);
+                mapa.fitBounds(rutaLinea.getBounds(), { padding: [30, 30] });
+            }
+        }
+
+        // 📋 Actualizar vista de ubicaciones
+        function actualizarVistaUbicaciones(envio) {
+            const lista = document.getElementById('lista-ubicaciones');
+            const ubicacionTexto = document.getElementById('ubicacion-texto');
+
+            if (!envio.ubicaciones || envio.ubicaciones.length === 0) {
+                ubicacionTexto.innerHTML = '📍 <strong>Sin ubicación registrada aún</strong><br>Presiona el botón de abajo para capturar la ubicación GPS';
+                ubicacionTexto.className = 'sin-ubicacion';
+                lista.innerHTML = '<p class="sin-ubicacion">📍 No hay ubicaciones registradas aún.</p>';
+                return;
+            }
+
+            const ultima = envio.ubicaciones[envio.ubicaciones.length - 1];
+            ubicacionTexto.innerHTML = `
+                📍 <strong>Latitud:</strong> ${ultima.lat.toFixed(6)}<br>
+                📍 <strong>Longitud:</strong> ${ultima.lng.toFixed(6)}<br>
+                🎯 <strong>Precisión:</strong> ±${Math.round(ultima.precision || 0)} metros<br>
+                🕐 <strong>Actualizado:</strong> ${ultima.fecha}
+            `;
+            ubicacionTexto.className = '';
+
+            mostrarUbicacionEnMapa(ultima.lat, ultima.lng);
+
+            lista.innerHTML = '';
+            envio.ubicaciones.forEach((u, indice) => {
+                const div = document.createElement('div');
+                div.className = 'ubicacion-item';
+                div.innerHTML = `
+                    <div class="punto-gps"></div>
+                    <div>
+                        <strong>📍 Ubicación ${indice + 1}</strong> — ${u.fecha}<br>
+                        <small>🌍 Lat: ${u.lat.toFixed(4)} | Lng: ${u.lng.toFixed(4)} | Precisión: ±${Math.round(u.precision || 0)}m</small>
+                    </div>
+                `;
+                lista.appendChild(div);
+            });
+        }
+
+        // 🔄 Actualizar estado del paquete
+        function actualizarEstado() {
+            if (!envioActual) return;
+            const nuevoEstado = document.getElementById('nuevo-estado').value;
+            const indice = envios.findIndex(e => e.guia === envioActual.guia);
+            
+            if (indice !== -1) {
+                envios[indice].estado = nuevoEstado;
+                envioActual.estado = nuevoEstado;
+                guardarDatos();
+                rastrearPaquete();
+                alert('✅ Estado actualizado correctamente');
+            }
+        }
+
+        // 💾 Guardar TODO en localStorage
+        function guardarDatos() {
+            localStorage.setItem('envios', JSON.stringify(envios));
+            localStorage.setItem('eliminados', JSON.stringify(eliminados));
+        }
+
+        // 🗑️ ELIMINAR pedido — lo mueve a Eliminados
+        function eliminarEnvio(guia) {
+            if (!confirm('⚠️ ¿Mover este pedido a la papelera?\n\nPodrás restaurarlo después si lo necesitas ♻️')) return;
+            
+            const indice = envios.findIndex(e => e.guia === guia);
+            if (indice !== -1) {
+                const envio = envios.splice(indice, 1)[0];
+                envio.fechaEliminacion = new Date().toLocaleString('es-MX');
+                eliminados.unshift(envio);
+                guardarDatos();
+                mostrarHistorial();
+                alert('✅ Pedido movido a la papelera 🗑️\n\n💡 Puedes restaurarlo desde la pestaña "🗑️ Eliminados"');
+            }
+        }
+
+        // ♻️ RESTAURAR pedido — lo devuelve al historial activo
+        function restaurarEnvio(guia) {
+            const indice = eliminados.findIndex(e => e.guia === guia);
+            if (indice !== -1) {
+                const envio = eliminados.splice(indice, 1)[0];
+                delete envio.fechaEliminacion;
+                envios.unshift(envio);
+                guardarDatos();
+                mostrarEliminados();
+                alert('✅ Pedido restaurado ♻️\n\nAparece de nuevo en el Historial Activo');
+            }
+        }
+
+        // 💀 BORRAR DEFINITIVAMENTE — NO se puede recuperar
+        function borrarDefinitivamente(guia) {
+            if (!confirm('⚠️⚠️⚠️ ¡CUIDADO!\n\n¿Borrar este pedido PARA SIEMPRE?\n\n❌ NO se podrá recuperar después.\n\n¿Estás SEGURO?')) return;
+            
+            const indice = eliminados.findIndex(e => e.guia === guia);
+            if (indice !== -1) {
+                eliminados.splice(indice, 1);
+                guardarDatos();
+                mostrarEliminados();
+                alert('✅ Pedido borrado definitivamente 💀');
+            }
+        }
+
+        // 📋 Mostrar HISTORIAL ACTIVO
+        function mostrarHistorial() {
+            const lista = document.getElementById('lista-envios');
+            const sinEnvios = document.getElementById('sin-envios');
+            
+            if (envios.length === 0) {
+                lista.innerHTML = '';
+                sinEnvios.style.display = 'block';
+                return;
+            }
+
+            sinEnvios.style.display = 'none';
+            lista.innerHTML = '';
+
+            envios.forEach(e => {
+                const div = document.createElement('div');
+                div.className = 'envio-item';
+                const tieneGPS = e.ubicaciones && e.ubicaciones.length > 0;
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h4>📦 ${e.guia} ${tieneGPS ? '📍' : ''}</h4>
+                            <p><strong>Para:</strong> ${e.destinatario.nombre}</p>
+                            <p><strong>Dirección:</strong> ${e.destinatario.direccion}</p>
+                            <p><strong>Fecha:</strong> ${e.fecha} | <strong>Total:</strong> $${e.costo}.00 ${tieneGPS ? '| 📍 Con Rastreo GPS' : ''}</p>
+                        </div>
+                        <span class="estado estado-${e.estado}">
+                            ${e.estado === 'pendiente' ? '⏳ Pendiente' : 
+                              e.estado === 'transito' ? '🚚 En Tránsito' : '✅ Entregado'}
+                        </span>
+                    </div>
+                    <div class="acciones-envio">
+                        <button class="btn-danger" onclick="eliminarEnvio('${e.guia}')">🗑️ Eliminar</button>
+                        <button class="btn-warning" onclick="window.open('#rastrear?${e.guia}', '_self')">🔍 Rastrear</button>
+                    </div>
+                `;
+                lista.appendChild(div);
+            });
+        }
+
+        // 🗑️ Mostrar PEDIDOS ELIMINADOS
+        function mostrarEliminados() {
+            const lista = document.getElementById('lista-eliminados');
+            const sinEliminados = document.getElementById('sin-eliminados');
+            
+            if (eliminados.length === 0) {
+                lista.innerHTML = '';
+                sinEliminados.style.display = 'block';
+                return;
+            }
+
+            sinEliminados.style.display = 'none';
+            lista.innerHTML = '';
+
+            eliminados.forEach(e => {
+                const div = document.createElement('div');
+                div.className = 'envio-item eliminado';
+                const tieneGPS = e.ubicaciones && e.ubicaciones.length > 0;
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h4>🗑️ ${e.guia} ${tieneGPS ? '📍' : ''}</h4>
+                            <p><strong>Para:</strong> ${e.destinatario.nombre}</p>
+                            <p><strong>Eliminado:</strong> ${e.fechaEliminacion || 'Desconocido'}</p>
+                            <p><strong>Total:</strong> $${e.costo}.00</p>
+                        </div>
+                        <span class="estado estado-${e.estado}">
+                            ${e.estado === 'pendiente' ? '⏳ Pendiente' : 
+                              e.estado === 'transito' ? '🚚 En Tránsito' : '✅ Entregado'}
+                        </span>
+                    </div>
+                    <div class="acciones-envio">
+                        <button class="btn-restore" onclick="restaurarEnvio('${e.guia}')">♻️ Restaurar</button>
+                        <button class="btn-danger" onclick="borrarDefinitivamente('${e.guia}')">💀 Borrar Definitivamente</button>
+                    </div>
+                `;
+                lista.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
